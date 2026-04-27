@@ -80,6 +80,18 @@ de hacerlo, en la fase correspondiente.
 
 ---
 
+## Git workflow obligatorio
+
+Al terminar CADA paso importante, validado y asegurado:
+1. `git add` los archivos del paso
+2. Hacé commit con mensaje según la estructura de commits del briefing
+3. `git push origin main`
+
+NUNCA dejes cambios sin committear y pushear al final de una sesión.
+El repositorio remoto es `https://github.com/Jaed69/P_ASISTANTE.git`.
+
+---
+
 ## Protocolo cuando algo no encaja con el plan
 
 Si encontrás que algo del briefing parece subóptimo, está mal, o se podría hacer
@@ -108,4 +120,4 @@ Esta regla aplica especialmente a:
 - Cambiar versiones fijadas (OpenClaw `2026.4.15`, Ubuntu `24.04`)
 - Exponer puertos al host
 - Usar `:latest` en imágenes Docker
-- Hacer push a `main` — usá branches y dejá que Luciel revise los PR
+- Hacer push a `main` sin haber validado el paso antes
