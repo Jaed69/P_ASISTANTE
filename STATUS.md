@@ -7,18 +7,15 @@
 
 ## Fase actual
 
-**Fase 0 — Correcciones y bugs base** (en curso)
+**Fase 0 — Correcciones y bugs base** (completada)
 
 ## Última sesión
 
-2026-04-27 — Creación de scripts base de Fase 0 (test-gvisor, entrypoint, db_init, db_helper)
+2026-04-27 — Integración de scripts base en setup.sh + docker-compose.yml
 
 ## En curso
 
 - [x] Bug 1 — Nginx subpath routing and single host port exposure
-  - setup.sh: genera nginx.conf y servicio nginx, quita puertos por bot
-  - add-bot.sh: eliminado argumento `<puerto>`, ya no escribe `${NAME}_PORT`
-  - .env.example: eliminadas líneas `_PORT`, actualizados comentarios
 - [x] Bug 4 — stop_grace_period: 30s + stop_signal: SIGTERM en cada bot
 - [x] Bug 3 — Volume mounts separados: config, workspace, data, skills
 - [x] Healthcheck calibrado: interval 60s / timeout 10s / retries 3 / start_period 90s
@@ -26,49 +23,47 @@
 - [x] Logging rotation (max-size 10m, max-file 3) y tmpfs /tmp en cada bot
 - [x] Imagen fijada a `ghcr.io/openclaw/openclaw:2026.4.15` (no :latest)
 - [x] `scripts/test-gvisor.sh` — detección gVisor ARM + fallback cap_drop/AppArmor
-  - Tests: runsc instalado → contenedor arranca → V8 JIT funciona → fallback seguro
-  - Salida: `runtime.env` con `FLEET_RUNTIME`, `FLEET_SECURITY_OPT`, `FLEET_CAP_DROP`, `FLEET_CAP_ADD`
-  - Sintaxis bash validada con `bash -n`
-- [x] `scripts/entrypoint.sh` — corre DENTRO del contenedor
-  - Orden: WAL checkpoint → activar WAL → integrity check → auto-restore → exec openclaw start
-  - Sintaxis bash validada con `bash -n`
-- [x] `scripts/db_init.py` — crea `data/fleet.db` con SQLCipher
-  - Schema completo: clients, bots, api_usage, gateway_tokens, google_tokens, actions_log, rate_limit_events
-  - PRAGMAs en orden correcto: key → busy_timeout → WAL → synchronous → wal_autocheckpoint
-  - Idempotente: si fleet.db existe, no toca nada
-- [x] `scripts/db_helper.py` — helper obligatorio para toda conexión a fleet.db
-  - Única función pública: `open_fleet_db(path)`
-  - Lanza `RuntimeError` si `DB_ENCRYPTION_KEY` no está en el entorno
+- [x] `scripts/entrypoint.sh` — corre DENTRO del contenedor (WAL checkpoint + integrity check + auto-restore)
+- [x] `scripts/db_init.py` — crea `data/fleet.db` con SQLCipher + schema completo
+- [x] `scripts/db_helper.py` — helper obligatorio `open_fleet_db()`
+- [x] **Integración en `setup.sh`**:
+  - Valida `DB_ENCRYPTION_KEY` en `.env`
+  - Ejecuta `test-gvisor.sh` y lee `runtime.env` para inyectar runtime/security
+  - Ejecuta `db_init.py` si `data/fleet.db` no existe
+  - Cada bot en `docker-compose.yml` incluye `entrypoint: ["/entrypoint.sh"]` + volumen `scripts/entrypoint.sh`
+  - Inyecta `runtime: runsc` o `security_opt`/`cap_drop`/`cap_add` según resultado de test-gvisor
+- [x] `.env.example` actualizado con `DB_ENCRYPTION_KEY`
 
 ## Commits realizados
 
 - `e230551` — `fix: nginx subpath routing and single host port exposure`
-  (Commit inicial del repo. Incluye Bug 1, Bug 3, Bug 4, healthcheck
-  calibrado, logging rotation, tmpfs, e imagen fijada a 2026.4.15.)
+- `ce7aaf6` — `feat: gvisor arm detection with v8 jit test and cap_drop fallback`
+- `49483f2` — `feat: add entrypoint.sh with wal checkpoint before integrity check and auto-restore`
+- `74b17f9` — `feat: add sqlcipher fleet.db schema with wal mode and all tables`
+- `a665b86` — `feat: add db_helper.py centralized connection opener for all scripts`
+- `3c4d793` — `docs: add git workflow rule to push after every validated step`
+- `b59b930` — `docs: clarify git workflow with branch rules and real-time validation exception`
+- `93ca8eb` — `feat: integrate test-gvisor, entrypoint, and db_init into setup.sh`
 
 ## Próximo commit
 
-Los siguientes commits están listos para hacerse (scripts creados, pendientes de `git add`):
+Fase 0 completada. Próximo paso: **Fase 1 — Infraestructura base**
 
-1. `feat: gvisor arm detection with v8 jit test and cap_drop fallback`
-   → `scripts/test-gvisor.sh`
-2. `feat: add entrypoint.sh with wal checkpoint before integrity check and auto-restore`
-   → `scripts/entrypoint.sh`
-3. `feat: add sqlcipher fleet.db schema with wal mode and all tables`
-   → `scripts/db_init.py`
-4. `feat: add db_helper.py centralized connection opener for all scripts`
-   → `scripts/db_helper.py`
+1. `feat: add vps-setup.sh for Ubuntu 24.04 ARM`
+2. `feat: add dreamer.py incremental daily and weekly pruning with retry fallback`
+3. `feat: add monitor.py with healthcheck polling, oomkilled listener, and degradation alerts`
+4. `feat: add backup.py with vacuum-into snapshot, openssl encryption, wal_checkpoint and post-backup vacuum`
+5. `feat: add rotate-token.sh with graceful restart and fleet.db update`
+6. `feat: add scale-bot.sh for manual ram scaling triggered by oom alerts`
 
 ## Bloqueado por
 
-- [ ] Ejecutar `scripts/test-gvisor.sh` en entorno con Docker para validar Tests 2-4
-      → actualmente solo se validó sintaxis bash; se requiere Docker + imagen OpenClaw
+- [ ] Ejecutar `scripts/test-gvisor.sh` en entorno con Docker para validar Tests 2-4 en ARM
+      → actualmente solo se validó sintaxis bash; se requiere Docker + imagen OpenClaw en VPS
 - [ ] Confirmar si OpenClaw `/healthz` requiere Authorization header
-      → docker run y test directo
-- [ ] Integrar `scripts/test-gvisor.sh` en `setup.sh` (inyectar `runtime:` o `security_opt` en docker-compose.yml)
-      → paso siguiente de Opción B
-- [ ] Integrar `scripts/entrypoint.sh` en `setup.sh` (agregar `entrypoint:` a cada servicio bot)
-      → paso siguiente de Opción B
+      → docker run y test directo en VPS
+- [ ] Validar que `sqlite3` está disponible dentro del contenedor `ghcr.io/openclaw/openclaw:2026.4.15`
+      → `entrypoint.sh` depende de él; si no está, instalarlo o modificar la imagen
 
 ## Decisiones tomadas en sesión
 
@@ -81,14 +76,20 @@ Los siguientes commits están listos para hacerse (scripts creados, pendientes d
 - `scripts/test-gvisor.sh` escribe `runtime.env` (no modifica `.env`) para no contaminar secretos.
 - `scripts/db_init.py` es idempotente: si `data/fleet.db` existe, sale limpiamente sin tocar nada.
 - `scripts/db_helper.py` tiene exactamente una función pública (`open_fleet_db`), sin helpers extra.
+- `setup.sh` maneja graceful degradation: si `python3` no está disponible, advierte pero no falla
+  (permite setup en entornos de desarrollo sin Python instalado).
+- `setup.sh` también maneja ausencia de `scripts/test-gvisor.sh` (warning, no error).
 
 ## Notas para Luciel
 
-- Faltan por corregir en Fase 0:
-  1. ~~Crear `scripts/test-gvisor.sh`~~ ✅
-  2. ~~Crear `scripts/entrypoint.sh`~~ ✅
-  3. ~~Crear `scripts/db_init.py` / `db_helper.py`~~ ✅
-  4. **Integrar scripts en `setup.sh` y `docker-compose.yml`** ← próximo paso
+- **Fase 0 COMPLETADA** ✅
+- Todos los scripts están integrados en `setup.sh` y generan `docker-compose.yml` completo.
+- El siguiente paso es **Fase 1 — Infraestructura base**:
+  - `vps-setup.sh` (instalador Ubuntu 24.04 ARM)
+  - `dreamer.py` (consolidación de memoria + pruning)
+  - `monitor.py` (healthcheck + OOM + alertas)
+  - `backup.py` (VACUUM INTO + cifrado OpenSSL)
+  - `rotate-token.sh` y `scale-bot.sh`
 - Las skills en `claude/skills/` (add-new-bot, diagnose-bot) son documentación
   operativa para Fases 2-4; no requieren implementación en Fase 0.
 - Python3 no está disponible en el entorno de desarrollo actual; los scripts Python
