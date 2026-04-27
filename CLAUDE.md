@@ -85,10 +85,16 @@ de hacerlo, en la fase correspondiente.
 Al terminar CADA paso importante, validado y asegurado:
 1. `git add` los archivos del paso
 2. Hacé commit con mensaje según la estructura de commits del briefing
-3. `git push origin main`
+3. `git push origin <branch>`
 
 NUNCA dejes cambios sin committear y pushear al final de una sesión.
 El repositorio remoto es `https://github.com/Jaed69/P_ASISTANTE.git`.
+
+**Flujo de branches:**
+- Cambios supervisados en sesión con Luciel (validación paso a paso en tiempo real):
+  se puede trabajar en `main` directamente y hacer push a `origin main`.
+- Cualquier otro cambio (asíncrono, no supervisado, o de otro colaborador):
+  crear una branch `feat/descripcion`, push a `origin`, y dejar que Luciel revise el PR.
 
 ---
 
@@ -120,4 +126,4 @@ Esta regla aplica especialmente a:
 - Cambiar versiones fijadas (OpenClaw `2026.4.15`, Ubuntu `24.04`)
 - Exponer puertos al host
 - Usar `:latest` en imágenes Docker
-- Hacer push a `main` sin haber validado el paso antes
+- Hacer push a `main` — usá branches y dejá que Luciel revise los PR
