@@ -28,6 +28,36 @@ set +a
 [ -z "${OPENROUTER_API_KEY:-}" ]  && error "OPENROUTER_API_KEY no configurado en .env"
 [[ "${OPENROUTER_API_KEY:-}" == *"CHANGE_ME"* ]] && error "OPENROUTER_API_KEY aún tiene el valor de ejemplo — cámbialo en .env"
 [ -z "${BOTS:-}" ] && error "BOTS no configurado en .env"
+[ -z "${DB_ENCRYPTION_KEY:-}" ] && error "DB_ENCRYPTION_KEY no configurado en .env"
+
+# ── Detectar runtime seguro ──────────────────────────────────────────────────
+if [ -x ./scripts/test-gvisor.sh ]; then
+  step "Detectando runtime seguro (gVisor o fallback)"
+  ./scripts/test-gvisor.sh
+else
+  warn "scripts/test-gvisor.sh no encontrado — asumiendo runc sin restricciones"
+fi
+
+if [ -f runtime.env ]; then
+  set -a
+  source runtime.env
+  set +a
+  info "Runtime detectado: ${FLEET_RUNTIME:-runc}"
+fi
+
+# ── Inicializar fleet.db si no existe ────────────────────────────────────────
+if [ ! -f data/fleet.db ]; then
+  step "Inicializando fleet.db"
+  if command -v python3 &>/dev/null; then
+    python3 scripts/db_init.py
+    info "fleet.db creado"
+  else
+    warn "python3 no encontrado — saltando inicialización de fleet.db"
+    warn "Ejecutá manualmente: python3 scripts/db_init.py"
+  fi
+else
+  info "fleet.db ya existe"
+fi
 
 # ── Generar token seguro ──────────────────────────────────────────────────────
 gen_token() {
@@ -167,6 +197,7 @@ for BOT in $BOTS; do
     restart: unless-stopped
     stop_grace_period: 30s
     stop_signal: SIGTERM
+    entrypoint: ["/entrypoint.sh"]
     environment:
       - OPENCLAW_GATEWAY_TOKEN=${TOKEN}
       - OPENROUTER_API_KEY=\${OPENROUTER_API_KEY}
@@ -179,6 +210,7 @@ for BOT in $BOTS; do
       - ./bots/${BOT}/workspace:/home/node/.openclaw/workspace
       - ./bots/${BOT}/data:/home/node/.openclaw/data
       - ./bots/${BOT}/skills:/home/node/.openclaw/skills
+      - ./scripts/entrypoint.sh:/entrypoint.sh:ro
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -196,6 +228,37 @@ for BOT in $BOTS; do
     tmpfs:
       - /tmp
 EOF
+
+  # Runtime y seguridad (inyectado por test-gvisor.sh)
+  if [ "${FLEET_RUNTIME:-}" = "runsc" ]; then
+    cat >> docker-compose.yml << EOF
+    runtime: runsc
+EOF
+  fi
+
+  if [ -n "${FLEET_SECURITY_OPT:-}" ]; then
+    echo "    security_opt:" >> docker-compose.yml
+    IFS=',' read -ra SEC_OPTS <<< "$FLEET_SECURITY_OPT"
+    for opt in "${SEC_OPTS[@]}"; do
+      echo "      - $opt" >> docker-compose.yml
+    done
+  fi
+
+  if [ -n "${FLEET_CAP_DROP:-}" ]; then
+    echo "    cap_drop:" >> docker-compose.yml
+    IFS=',' read -ra CAPS <<< "$FLEET_CAP_DROP"
+    for cap in "${CAPS[@]}"; do
+      echo "      - $cap" >> docker-compose.yml
+    done
+  fi
+
+  if [ -n "${FLEET_CAP_ADD:-}" ]; then
+    echo "    cap_add:" >> docker-compose.yml
+    IFS=',' read -ra CAPS <<< "$FLEET_CAP_ADD"
+    for cap in "${CAPS[@]}"; do
+      echo "      - $cap" >> docker-compose.yml
+    done
+  fi
 done
 
 cat >> docker-compose.yml << 'NGINX'
