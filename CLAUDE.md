@@ -123,7 +123,7 @@ Esta regla aplica especialmente a:
 - Crear nuevos archivos `.env*` o gestores de secretos
 - Tocar `templates/skills/approved-skills.txt`
 - Modificar el schema de fleet.db (clients, bots, api_usage, etc.)
-- Cambiar versiones fijadas (OpenClaw `2026.4.15`, Ubuntu `24.04`)
+- Cambiar versiones fijadas (OpenClaw `2026.4.26-slim`, Ubuntu `24.04`)
 - Exponer puertos al host
 - Usar `:latest` en imágenes Docker
 - Hacer push a `main` — usá branches y dejá que Luciel revise los PR

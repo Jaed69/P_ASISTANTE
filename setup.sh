@@ -192,7 +192,7 @@ for BOT in $BOTS; do
 
   # ── ${BOT} ── UI: http://127.0.0.1:18788/${BOT}/ ── SOUL: bots/${BOT}/config/SOUL.md
   ${BOT}:
-    image: \${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:2026.4.15}
+    image: \${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:2026.4.26-slim}
     container_name: openclaw-${BOT}
     restart: unless-stopped
     stop_grace_period: 30s

@@ -14,7 +14,7 @@ warn()  { echo -e "${YELLOW}⚠${NC} $*"; }
 error() { echo -e "${RED}✗${NC} $*" >&2; }
 step()  { echo -e "\n${CYAN}──${NC} $*"; }
 
-IMAGE="${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:2026.4.15}"
+IMAGE="${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:2026.4.26-slim}"
 RUNTIME=""
 SECURITY_OPT=""
 CAP_DROP=""
