@@ -11,7 +11,7 @@
 
 ## Última sesión
 
-2026-04-27 — Integración de scripts base en setup.sh + docker-compose.yml
+2026-04-27 — Fix: imagen OpenClaw actualizada a `2026.4.26-slim` + comando entrypoint corregido
 
 ## En curso
 
@@ -21,9 +21,9 @@
 - [x] Healthcheck calibrado: interval 60s / timeout 10s / retries 3 / start_period 90s
 - [x] Token interpolation fix: valor escrito directamente en docker-compose.yml
 - [x] Logging rotation (max-size 10m, max-file 3) y tmpfs /tmp en cada bot
-- [x] Imagen fijada a `ghcr.io/openclaw/openclaw:2026.4.15` (no :latest)
+- [x] Imagen fijada a `ghcr.io/openclaw/openclaw:2026.4.26-slim` (no :latest)
 - [x] `scripts/test-gvisor.sh` — detección gVisor ARM + fallback cap_drop/AppArmor
-- [x] `scripts/entrypoint.sh` — corre DENTRO del contenedor (WAL checkpoint + integrity check + auto-restore)
+- [x] `scripts/entrypoint.sh` — corre DENTRO del contenedor (comando: `node dist/index.js gateway --bind lan --port 18789 --allow-unconfigured`)
 - [x] `scripts/db_init.py` — crea `data/fleet.db` con SQLCipher + schema completo
 - [x] `scripts/db_helper.py` — helper obligatorio `open_fleet_db()`
 - [x] **Integración en `setup.sh`**:
@@ -32,7 +32,9 @@
   - Ejecuta `db_init.py` si `data/fleet.db` no existe
   - Cada bot en `docker-compose.yml` incluye `entrypoint: ["/entrypoint.sh"]` + volumen `scripts/entrypoint.sh`
   - Inyecta `runtime: runsc` o `security_opt`/`cap_drop`/`cap_add` según resultado de test-gvisor
-- [x] `.env.example` actualizado con `DB_ENCRYPTION_KEY`
+- [x] `.env.example` actualizado con `DB_ENCRYPTION_KEY` e imagen `2026.4.26-slim`
+- [x] `README.md` con paso a paso para levantar el proyecto
+- [x] `CLAUDE.md` con reglas de git workflow
 
 ## Commits realizados
 
@@ -44,6 +46,9 @@
 - `3c4d793` — `docs: add git workflow rule to push after every validated step`
 - `b59b930` — `docs: clarify git workflow with branch rules and real-time validation exception`
 - `93ca8eb` — `feat: integrate test-gvisor, entrypoint, and db_init into setup.sh`
+- `6ff0d00` — `docs: update STATUS.md marking Phase 0 complete`
+- `d1b1a56` — `docs: add README.md with step-by-step setup instructions`
+- `52f78d1` — `fix: update OpenClaw image to 2026.4.26-slim and correct entrypoint command`
 
 ## Próximo commit
 
@@ -62,8 +67,6 @@ Fase 0 completada. Próximo paso: **Fase 1 — Infraestructura base**
       → actualmente solo se validó sintaxis bash; se requiere Docker + imagen OpenClaw en VPS
 - [ ] Confirmar si OpenClaw `/healthz` requiere Authorization header
       → docker run y test directo en VPS
-- [ ] Validar que `sqlite3` está disponible dentro del contenedor `ghcr.io/openclaw/openclaw:2026.4.15`
-      → `entrypoint.sh` depende de él; si no está, instalarlo o modificar la imagen
 
 ## Decisiones tomadas en sesión
 
@@ -79,6 +82,11 @@ Fase 0 completada. Próximo paso: **Fase 1 — Infraestructura base**
 - `setup.sh` maneja graceful degradation: si `python3` no está disponible, advierte pero no falla
   (permite setup en entornos de desarrollo sin Python instalado).
 - `setup.sh` también maneja ausencia de `scripts/test-gvisor.sh` (warning, no error).
+- **Imagen OpenClaw actualizada de `2026.4.15` → `2026.4.26-slim`** (última versión disponible, con soporte ARM64).
+- **Entrypoint corregido:** `openclaw start` no existe en la imagen. El comando correcto es
+  `node dist/index.js gateway --bind lan --port 18789 --allow-unconfigured`.
+- **`sqlite3` no está en la imagen `node:24-bookworm-slim`**, por lo que `entrypoint.sh`
+  ya no intenta hacer WAL checkpoint ni integrity check. OpenClaw maneja su propia DB internamente.
 
 ## Notas para Luciel
 
@@ -87,12 +95,53 @@ Fase 0 completada. Próximo paso: **Fase 1 — Infraestructura base**
 - El siguiente paso es **Fase 1 — Infraestructura base**:
   - `vps-setup.sh` (instalador Ubuntu 24.04 ARM)
   - `dreamer.py` (consolidación de memoria + pruning)
-  - `monitor.py` (healthcheck + OOM + alertas)
+  - `monitor.py` (monitoreo y alertas)
   - `backup.py` (VACUUM INTO + cifrado OpenSSL)
   - `rotate-token.sh` y `scale-bot.sh`
 - Las skills en `claude/skills/` (add-new-bot, diagnose-bot) son documentación
   operativa para Fases 2-4; no requieren implementación en Fase 0.
 - Python3 no está disponible en el entorno de desarrollo actual; los scripts Python
   fueron escritos según el briefing pero no se pudo hacer `py_compile`. Validar en VPS.
+- **Instrucciones para actualizar la VM** (ver sección "Cómo actualizar la VM" abajo).
+
+---
+
+## Cómo actualizar la VM
+
+Si ya tenés el repo clonado en la VM (`~/P_ASISTANTE`), ejecutá estos pasos:
+
+```bash
+cd ~/P_ASISTANTE
+
+# 1. Guardar tus configs actuales (por si acaso)
+cp .env .env.backup
+cp docker-compose.yml docker-compose.yml.backup
+cp nginx.conf nginx.conf.backup
+
+# 2. Traer los últimos cambios del repo
+git pull origin main
+
+# 3. Si tenés conflictos en .env (porque lo editaste localmente), resolvélos:
+#    - git checkout --theirs .env   (usa el del repo)
+#    - O manualmente: mantené tus valores y agregá DB_ENCRYPTION_KEY
+
+# 4. Actualizar la imagen en tu .env (si ya existe)
+sed -i 's/2026\.4\.15/2026.4.26-slim/g' .env
+
+# 5. Re-ejecutar setup.sh (regenera docker-compose.yml y nginx.conf con lo nuevo)
+source venv/bin/activate  # si usás venv para sqlcipher3
+./setup.sh
+
+# 6. Bajar los contenedores viejos y levantar los nuevos
+docker compose down
+docker compose up -d
+
+# 7. Verificar que arrancan
+docker compose ps
+docker compose logs personal | tail -10
+```
+
+**Nota importante:** `docker-compose.yml` y `nginx.conf` se regeneran de cero con `./setup.sh`.
+No pierdas tiempo resolviendo conflictos en esos archivos — simplemente sobrescribilos.
 
 (End of file)
